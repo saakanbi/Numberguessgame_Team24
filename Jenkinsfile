@@ -12,11 +12,11 @@ pipeline {
         TOMCAT_USER = 'admin'  
         TOMCAT_PASSWORD = 'admin123'  
     }
-
+    
     stages {
         stage('Clone Repository') {
             steps {
-                git branch: "${BRANCH}", url: "${GIT_REPO}"
+                 git branch: 'main', url: 'https://github.com/saakanbi/Numberguessgame_Team24.git'
             }
         }
 
