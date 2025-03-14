@@ -6,11 +6,12 @@ pipeline {
     }
 
     environment {
-        GIT_REPO = 'https://github.com/saakanbi/Numberguessgame_Team24.git'
-        BRANCH = 'main'  
-        TOMCAT_URL = 'http://172.31.92.215:8080/manager/text'
-        TOMCAT_USER = 'admin'  
-        TOMCAT_PASSWORD = 'admin123'  
+        PROJECT_NAME = "NumberGuessGame"
+        ARTIFACT = "target/NumberGuessGame-1.0-SNAPSHOT.war"
+        DEPLOY_DIR = "/home/ec2-user/apache-tomcat-7.0.94/webapps"
+        TOMCAT_USER = "ec2-user"
+        SERVER_IP = "ec2-user@3.149.248.77" // 🔥 Replace with your Tomcat Server IP
+        
     }
     
     stages {
