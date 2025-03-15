@@ -3,12 +3,16 @@ pipeline {
 
     environment {
         MAVEN_HOME = tool 'Maven'  // Ensure Maven is installed in Jenkins
+        TOMCAT_HOME = '/home/ec2-user/apache-tomcat-7.0.94' // Path to Tomcat home directory
+        TOMCAT_USER = 'admin' // Tomcat manager username
+        TOMCAT_PASSWORD = 'admin123' // Tomcat manager password
     }
 
     stages {
         stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/saakanbi/Numberguessgame_Team24.git'
+                // Change the branch name to 'wole' here
+                git branch: 'wole', url: 'https://github.com/saakanbi/Numberguessgame_Team24.git'
             }
         }
 
@@ -26,13 +30,31 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh '''
-                mv target/NumberGuessGame-1.0-SNAPSHOT.war target/NumberGuessGame.war
-                cp target/NumberGuessGame.war /home/ec2-user/apache-tomcat-7.0.94/webapps/
-                '''
+                script {
+                    // Define the path to the WAR file
+                    def warFile = 'target/NumberGuessGame-1.0-SNAPSHOT.war'
+                    def warDest = 'target/NumberGuessGame.war'
+
+                    // Rename the WAR file
+                    sh "mv ${warFile} ${warDest}"
+
+                    // Deploy the WAR file to Tomcat's webapps directory
+                    echo "Deploying the WAR file to Tomcat..."
+                    sh """
+                    cp ${warDest} ${TOMCAT_HOME}/webapps/
+                    """
+
+                    // Restart Tomcat to deploy the application (if needed)
+                    echo "Restarting Tomcat to apply the deployment..."
+                    sh """
+                    ${TOMCAT_HOME}/bin/shutdown.sh
+                    sleep 5
+                    ${TOMCAT_HOME}/bin/startup.sh
+                    """
+                }
             }
         }
-    } 
+    }
 
     post {
         success {
