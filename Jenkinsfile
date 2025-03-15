@@ -26,11 +26,14 @@ pipeline {
 
         stage('Deploy') {
             steps {
-             def warFile = "target/NumberGuessGame-1.0-SNAPSHOT.war"
-                    def tomcatDeployUrl = "${TOMCAT_URL}/deploy?path=/NumberGuessGame"
+                sh '''
+                mv target/NumberGuessGame-1.0-SNAPSHOT.war target/NumberGuessGame.war
+                cp target/NumberGuessGame.war /home/ec2-user/apache-tomcat-7.0.94/webapps/
+                '''
             }
         }
-    
+    } 
+
     post {
         success {
             echo '✅ Build and Deployment Successful'
