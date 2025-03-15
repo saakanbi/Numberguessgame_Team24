@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        MAVEN_HOME = tool 'Maven' // Ensure Maven is installed in Jenkins
+        MAVEN_HOME = tool 'Maven'  // Ensure Maven is installed in Jenkins
     }
 
     stages {
