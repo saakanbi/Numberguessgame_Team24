@@ -23,19 +23,25 @@ pipeline {
                 sh 'mvn test'
             }
         }
-
-        stage('Deploy') {
-            steps {
-                sh '''
-                # Rename the WAR file to match expected name
-                mv target/NumberGuessGame-1.0-SNAPSHOT.war target/NumberGuessGame.war
-                
-                # Deploy to Tomcat
-                cp target/NumberGuessGame.war /path/to/tomcat/webapps/
-                '''
-            }
-        }
+stage('Deploy') {
+    steps {
+        sh '''
+        cp target/NumberGuessGame-1.0-SNAPSHOT.war /opt/tomcat/webapps/
+        '''
     }
+}
+    //     stage('Deploy') {
+    //         steps {
+    //             sh '''
+    //             # Rename the WAR file to match expected name
+    //             mv target/NumberGuessGame-1.0-SNAPSHOT.war target/NumberGuessGame.war
+                
+    //             # Deploy to Tomcat
+    //             cp target/NumberGuessGame.war /path/to/tomcat/webapps/
+    //             '''
+    //         }
+    //     }
+    // }
 
     post {
         success {
