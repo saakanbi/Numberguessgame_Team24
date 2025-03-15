@@ -26,17 +26,11 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh '''
-                # Rename the WAR file to match expected name
-                mv target/NumberGuessGame-1.0-SNAPSHOT.war target/NumberGuessGame.war
-                
-                # Deploy to Tomcat
-                cp target/NumberGuessGame.war /path/to/tomcat/webapps/
-                '''
+             def warFile = "target/NumberGuessGame-1.0-SNAPSHOT.war"
+                    def tomcatDeployUrl = "${TOMCAT_URL}/deploy?path=/NumberGuessGame"
             }
         }
-    }
-
+    
     post {
         success {
             echo '✅ Build and Deployment Successful'
