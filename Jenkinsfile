@@ -2,151 +2,68 @@ pipeline {
     agent any
     
     tools {
-        maven 'Maven'
-        jdk 'JDK8'
-    }
-    
-    environment {
-        SONAR_SERVER = 'SonarQube'
+        maven 'Maven 3.8.6'
+        jdk 'JDK 11'
     }
     
     stages {
-        stage('Build Dev Branch') {
+        stage('Checkout') {
             steps {
-                echo "Starting build flow with Dev branch"
-                checkout([$class: 'GitSCM', branches: [[name: '*/dev']], 
-                          userRemoteConfigs: [[url: 'YOUR_GIT_REPO_URL']]])
-                
-                script {
-                    def pom = readMavenPom file: 'pom.xml'
-                    env.APP_NAME = pom.artifactId
-                    env.APP_VERSION = pom.version
-                    env.WAR_FILE = "${pom.artifactId}-${pom.version}.war"
-                    env.CONTEXT_PATH = pom.artifactId.toLowerCase()
-                }
-                
-                sh 'mvn clean package'
-                sh 'mvn test'
-                
-                withSonarQubeEnv(SONAR_SERVER) {
-                    sh """
-                    mvn sonar:sonar \
-                      -Dsonar.projectKey=${env.APP_NAME} \
-                      -Dsonar.projectName='${env.APP_NAME}' \
-                      -Dsonar.branch.name=dev
-                    """
-                }
-                
-                timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: true
-                }
-                
-                sh """
-                    docker stop numbergame-dev || true
-                    docker rm numbergame-dev || true
-                    docker run -d -p 8081:8080 --name numbergame-dev \
-                        -v \${WORKSPACE}/target/${WAR_FILE}:/usr/local/tomcat/webapps/${CONTEXT_PATH}.war \
-                        tomcat:9-jre8
-                """
-                
-                sh "sleep 30"
-                sh "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\\n' http://localhost:8081/${CONTEXT_PATH}/ || echo 'Application may still be deploying'"
+                checkout scm
             }
         }
         
-        stage('Build Feature Branch') {
+        stage('Build') {
             steps {
-                echo "Dev branch successful, continuing with Feature branch"
-                checkout([$class: 'GitSCM', branches: [[name: '*/feature']], 
-                          userRemoteConfigs: [[url: 'YOUR_GIT_REPO_URL']]])
-                
-                script {
-                    def pom = readMavenPom file: 'pom.xml'
-                    env.APP_NAME = pom.artifactId
-                    env.APP_VERSION = pom.version
-                    env.WAR_FILE = "${pom.artifactId}-${pom.version}.war"
-                    env.CONTEXT_PATH = pom.artifactId.toLowerCase()
-                }
-                
-                sh 'mvn clean package'
-                sh 'mvn test'
-                
-                withSonarQubeEnv(SONAR_SERVER) {
-                    sh """
-                    mvn sonar:sonar \
-                      -Dsonar.projectKey=${env.APP_NAME} \
-                      -Dsonar.projectName='${env.APP_NAME}' \
-                      -Dsonar.branch.name=feature
-                    """
-                }
-                
-                timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: true
-                }
-                
-                sh """
-                    docker stop numbergame-feature || true
-                    docker rm numbergame-feature || true
-                    docker run -d -p 8082:8080 --name numbergame-feature \
-                        -v \${WORKSPACE}/target/${WAR_FILE}:/usr/local/tomcat/webapps/${CONTEXT_PATH}.war \
-                        tomcat:9-jre8
-                """
-                
-                sh "sleep 30"
-                sh "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\\n' http://localhost:8082/${CONTEXT_PATH}/ || echo 'Application may still be deploying'"
+                sh 'mvn clean compile'
             }
         }
         
-        stage('Build Main Branch') {
+        stage('Test') {
             steps {
-                echo "Feature branch successful, continuing with Main branch (Production)"
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']], 
-                          userRemoteConfigs: [[url: 'YOUR_GIT_REPO_URL']]])
-                
-                script {
-                    def pom = readMavenPom file: 'pom.xml'
-                    env.APP_NAME = pom.artifactId
-                    env.APP_VERSION = pom.version
-                    env.WAR_FILE = "${pom.artifactId}-${pom.version}.war"
-                    env.CONTEXT_PATH = pom.artifactId.toLowerCase()
-                }
-                
-                sh 'mvn clean package'
                 sh 'mvn test'
-                
-                withSonarQubeEnv(SONAR_SERVER) {
+                junit allowEmptyResults: true, testResults: '/target/surefire-reports/*.xml'
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                sh 'mvn package -DskipTests'
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+        
+        stage('Deploy to Test') {
+            steps {
+                // Copy WAR file to EC2 test server with CORRECT filename
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'keyfile')]) {
                     sh """
-                    mvn sonar:sonar \
-                      -Dsonar.projectKey=${env.APP_NAME} \
-                      -Dsonar.projectName='${env.APP_NAME}' \
-                      -Dsonar.branch.name=main
+                        scp -i \$keyfile -o StrictHostKeyChecking=no target/NumberGuessGame-1.0-SNAPSHOT.war ec2-user@52.87.206.58:/tmp/
+                        ssh -i \$keyfile -o StrictHostKeyChecking=no ec2-user@52.87.206.58 'sudo cp /tmp/NumberGuessGame-1.0-SNAPSHOT.war ~/apache-tomcat-7.0.94/webapps/NumberGuessGame.war && sudo ~/apache-tomcat-7.0.94/bin/shutdown.sh && sleep 5 && sudo ~/apache-tomcat-7.0.94/bin/startup.sh'
                     """
                 }
-                
-                timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: true
+            }
+        }
+        
+        stage('Deploy to Production') {
+            steps {
+                // Copy WAR file to EC2 production server with CORRECT filename
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'keyfile')]) {
+                    sh """
+                        scp -i \$keyfile -o StrictHostKeyChecking=no target/NumberGuessGame-1.0-SNAPSHOT.war ec2-user@52.87.206.58:/tmp/
+                        ssh -i \$keyfile -o StrictHostKeyChecking=no ec2-user@52.87.206.58 'sudo cp /tmp/NumberGuessGame-1.0-SNAPSHOT.war ~/apache-tomcat-7.0.94/webapps/NumberGuessGame.war && sudo ~/apache-tomcat-7.0.94/bin/shutdown.sh && sleep 5 && sudo ~/apache-tomcat-7.0.94/bin/startup.sh'
+                    """
                 }
-                
-                sh """
-                    docker stop numbergame-prod || true
-                    docker rm numbergame-prod || true
-                    docker run -d -p 8083:8080 --name numbergame-prod \
-                        -v \${WORKSPACE}/target/${WAR_FILE}:/usr/local/tomcat/webapps/${CONTEXT_PATH}.war \
-                        tomcat:9-jre8
-                """
-                
-                sh "sleep 30"
-                sh "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\\n' http://localhost:8083/${CONTEXT_PATH}/ || echo 'Application may still be deploying'"
             }
         }
     }
     
     post {
         success {
-            echo "Complete pipeline executed successfully! All branches built and deployed."
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "Pipeline failed! Check the logs for details."
+            echo 'Pipeline failed!'
         }
         always {
             cleanWs()
